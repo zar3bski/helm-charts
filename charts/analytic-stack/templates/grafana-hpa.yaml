@@ -1,0 +1,28 @@
+{{- if .Values.grafana.autoscaling.enabled }}
+apiVersion: autoscaling/v2beta1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "analytic-stack.fullname" . }}
+  labels:
+    {{- include "analytic-stack.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "analytic-stack.fullname" . }}-grafana
+  minReplicas: {{ .Values.grafana.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.grafana.autoscaling.maxReplicas }}
+  metrics:
+  {{- if .Values.grafana.autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: cpu
+        targetAverageUtilization: {{ .Values.grafana.autoscaling.targetCPUUtilizationPercentage }}
+  {{- end }}
+  {{- if .Values.grafana.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        targetAverageUtilization: {{ .Values.grafana.autoscaling.targetMemoryUtilizationPercentage }}
+  {{- end }}
+{{- end }}

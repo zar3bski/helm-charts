@@ -1,0 +1,37 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ template "analytic-stack.fullname" . }}-config-files
+  labels:
+{{ include "analytic-stack.labels" . | indent 4 }}
+data:
+  influxdb_datasource.yml: |
+    apiVersion: 1
+    datasources:
+    - name: {{ include "analytic-stack.fullname" . }}
+      type: influxdb
+      access: proxy
+      isDefault: false
+      url: http://{{ include "analytic-stack.fullname" . }}-influx.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.influx.service.port }}
+      database: {{.Values.influx.database_name }}
+      user: {{ include "analytic-stack.fullname" . }}-influx-user
+      password: $INFLUXDB_USER_PASSWORD__FILE
+    editable: true
+  grafana.ini: |
+    org_name = {{ template "analytic-stack.fullname" . }}
+    [server]
+    serve_from_sub_path = true
+    [analytics]
+    reporting_enabled = false
+    check_for_updates = false
+    [auth.{{.Values.grafana.Oauth.provider }}]
+    name = {{ template "analytic-stack.fullname" . }}-{{.Values.grafana.Oauth.provider }}
+    enabled = true
+    allow_sign_up = {{.Values.grafana.Oauth.allow_sign_up }}
+    client_id = {{.Values.grafana.Oauth.client_id }}
+    client_secret = {{.Values.grafana.Oauth.client_secret }}
+    scopes = {{.Values.grafana.Oauth.scopes }}
+    auth_url = {{.Values.grafana.Oauth.auth_url }}
+    token_url = {{.Values.grafana.Oauth.token_url }} 
+  database_init.sh: |
+    influx -execute 'CREATE DATABASE {{.Values.influx.database_name }}'

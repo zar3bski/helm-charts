@@ -1,0 +1,30 @@
+{{- if .Values.influx -}}
+{{- if .Values.influx.autoscaling.enabled }}
+apiVersion: autoscaling/v2beta1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "analytic-stack.fullname" . }}
+  labels:
+    {{- include "analytic-stack.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "analytic-stack.fullname" . }}-influx
+  minReplicas: {{ .Values.influx.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.influx.autoscaling.maxReplicas }}
+  metrics:
+  {{- if .Values.influx.autoscaling.targetCPUUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: cpu
+        targetAverageUtilization: {{ .Values.influx.autoscaling.targetCPUUtilizationPercentage }}
+  {{- end }}
+  {{- if .Values.influx.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        targetAverageUtilization: {{ .Values.influx.autoscaling.targetMemoryUtilizationPercentage }}
+  {{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,87 @@
+{{- if .Values.influx -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "analytic-stack.fullname" . }}-influx
+  labels:
+    {{- include "analytic-stack.labels" . | nindent 4 }}-influx
+spec:
+{{- if not .Values.influx.autoscaling.enabled }}
+  replicas: {{ .Values.influx.replicaCount }}
+{{- end }}
+  selector:
+    matchLabels:
+      {{- include "analytic-stack.selectorLabels" . | nindent 6 }}-influx
+  template:
+    metadata:
+    {{- with .Values.influx.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}-influx
+    {{- end }}
+      labels:
+        {{- include "analytic-stack.selectorLabels" . | nindent 8 }}-influx
+    spec:
+      {{- with .Values.influx.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "analytic-stack.serviceAccountName" . }}
+      volumes:
+        - name: influx-data
+          emptyDir: {}
+        - name: {{ include "analytic-stack.fullname" . }}-secret-volume
+          secret:
+            secretName: {{ include "analytic-stack.fullname" . }}-secrets
+        - name: database-initialisation
+          configMap: 
+            name: {{ template "analytic-stack.fullname" . }}-config-files
+      {{- with .Values.influx.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.influx.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.influx.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}-influx
+          securityContext:
+            {{- toYaml .Values.influx.securityContext | nindent 12 }}
+          image: "{{ .Values.influx.image.repository }}:{{ .Values.influx.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.influx.image.pullPolicy }}
+          env: 
+            - name: INFLUXDB_ADMIN_USER
+              value: {{ include "analytic-stack.fullname" . }}-influx-admin
+            - name: INFLUXDB_USER_USER
+              value: {{ include "analytic-stack.fullname" . }}-influx-user 
+            - name: INFLUXDB_ADMIN_PASSWORD__FILE
+              value: /run/secrets/{{ include "analytic-stack.fullname" . }}/influx_admin_password
+            - name: INFLUXDB_USER_PASSWORD__FILE
+              value: /run/secrets/{{ include "analytic-stack.fullname" . }}/influx_user_password          
+          ports:
+            - name: http
+              containerPort: 8086
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /ping
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /ping
+              port: http
+          volumeMounts:
+            - name: influx-data
+              mountPath: /var/lib/influxdb
+            - name: {{ include "analytic-stack.fullname" . }}-secret-volume 
+              mountPath: /run/secrets/{{ include "analytic-stack.fullname" . }}
+            - name: database-initialisation
+              mountPath: "/docker-entrypoint-initdb.d/database_init.sh"
+              subPath: database_init.sh
+      {{- with .Values.influx.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}-influx
+      {{- end }}
+{{- end }}

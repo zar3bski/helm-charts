@@ -1,0 +1,99 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "analytic-stack.fullname" . }}-grafana
+  labels:
+    {{- include "analytic-stack.labels" . | nindent 4 }}-grafana
+spec:
+{{- if not .Values.grafana.autoscaling.enabled }}
+  replicas: {{ .Values.grafana.replicaCount }}
+{{- end }}
+  selector:
+    matchLabels:
+      {{- include "analytic-stack.selectorLabels" . | nindent 6 }}-grafana
+  template:
+    metadata:
+    {{- with .Values.grafana.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}-grafana
+    {{- end }}
+      labels:
+        {{- include "analytic-stack.selectorLabels" . | nindent 8 }}-grafana
+    spec:
+      {{- with .Values.grafana.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "analytic-stack.serviceAccountName" . }}
+      volumes:
+        - name: grafana
+          emptyDir: {}
+        - name: {{ include "analytic-stack.fullname" . }}-secret-volume
+          secret:
+            secretName: {{ include "analytic-stack.fullname" . }}-secrets
+# TODO: end conf file provisionning
+        - name: ini
+          configMap:
+            name: {{ template "analytic-stack.fullname" . }}-config-files
+      securityContext:
+        {{- toYaml .Values.grafana.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}-grafana
+          securityContext:
+            {{- toYaml .Values.grafana.securityContext | nindent 12 }}
+          image: "{{ .Values.grafana.image.repository }}:{{ .Values.grafana.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.grafana.image.pullPolicy }}
+          env:
+          {{- with (index .Values.grafana.ingress.hosts 0) }}
+          - name: GF_DOMAIN
+            value: {{ .host }}
+          - name: GF_SERVER_ROOT_URL
+            value: http://{{ .host }}{{- range .paths }}{{ . }}{{- end }}
+          {{- end }}
+          - name: GF_SECURITY_ADMIN_PASSWORD__FILE
+            value: /run/secrets/{{ include "analytic-stack.fullname" . }}/grafana_admin_password
+          - name: INFLUXDB_USER_PASSWORD__FILE
+            value: /run/secrets/{{ include "analytic-stack.fullname" . }}/influx_user_password 
+          - name: GF_INSTALL_PLUGINS
+            value: {{ .Values.grafana.plugins }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          volumeMounts:
+            - name: grafana
+              mountPath: /var/lib/grafana
+            - name: {{ include "analytic-stack.fullname" . }}-secret-volume 
+              mountPath: /run/secrets/{{ include "analytic-stack.fullname" . }}
+            - name: ini
+              mountPath: "/etc/grafana/grafana.ini"
+              subPath: grafana.ini
+#            - name: dashboards
+#              mountPath: /etc/grafana/dashboards
+#            - name: providers
+#              mountPath: /etc/grafana/provisioning/dashboards
+            - name: ini
+              mountPath: /etc/grafana/provisioning/datasources/influxdb_datasource.yml
+              subPath: influxdb_datasource.yml
+          resources:
+            {{- toYaml .Values.grafana.resources | nindent 12 }}
+      {{- with .Values.grafana.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}-grafana
+      {{- end }}
+      {{- with .Values.grafana.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.grafana.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
